@@ -70,6 +70,17 @@
 .dhc-plan__desc p { margin: 0 0 6px; }
 .dhc-plan__desc ul { margin: 0; padding-left: 18px; }
 .dhc-empty { text-align: center; color: #666; margin-top: 32px; }
+/* The reader's current plan */
+.dhc-plan { position: relative; }
+.dhc-plan--current { border: 2px solid var(--dhc-gold); background: #FFFBF3; }
+.dhc-plan__badge {
+  position: absolute; top: -12px; left: 20px; padding: 2px 10px; border-radius: 12px;
+  background: var(--dhc-gold); color: #FFF; font-size: 12px; font-weight: 700; line-height: 20px; text-transform: uppercase; letter-spacing: .04em;
+}
+.dhc-plan__valid { margin: 0; font-size: 14px; font-weight: 700; color: #1E894D; }
+.dhc-btn-primary.dhc-btn-current, .dhc-btn-primary.dhc-btn-current:disabled {
+  background: #FFF; border-color: var(--dhc-gold); color: var(--dhc-gold); opacity: 1; cursor: default;
+}
 
 /* Same look as the review page's pay button */
 .dhc-btn-primary, .dhc-payButton {

@@ -82,7 +82,10 @@
     TRY_AGAIN: 'Try again',
     PLANS_FAILED: 'Plans could not be loaded. Please refresh the page.',
     NO_PLANS: 'No plans are set up for this page yet.',
-    SUBSCRIBE: 'Subscribe'
+    SUBSCRIBE: 'Subscribe',
+    CURRENT_PLAN: 'Current Plan',
+    VALID_TILL: 'Valid till ',
+    SUBSCRIBED_TO: 'You are subscribed to '
   };
 
   const CONFIG = window.DH_CAMPAIGN || {};
@@ -249,7 +252,7 @@
   }
 
   // One account check per page view: 'logged-out' | 'subscriber' | 'not-subscriber' | 'error'.
-  const state = { plans: [], user: null, paying: false, plan: null, view: 'loading' };
+  const state = { plans: [], user: null, activeSubs: [], paying: false, plan: null, view: 'loading' };
   let accountCheck;
   function accountStatus() {
     if (!isLoggedIn()) return Promise.resolve('logged-out');
@@ -258,6 +261,7 @@
       await setAccessTypeUser(state.user);
       const subs = await getSubscriptions();
       state.hadSubscriptions = subs.length > 0; // purchase event: 'new user' or 'returning user'
+      state.activeSubs = subs.filter(subscriptionActive);
       return subs.some(subscriptionActive) ? 'subscriber' : 'not-subscriber';
     })().catch(error => {
       console.warn('[campaign] Account check failed:', error);
@@ -355,7 +359,7 @@
     state.view = view;
     const bar = preview
       ? `<div class="dhc-preview-bar">PREVIEW: plans from ${esc(dataHost)}; login and payment only work on the newspaper site.
-           Screens: <a href="?q=review${planIds[0] ? `&plan_id=${esc(planIds[0])}` : ''}">review</a><a href="?q=success">success</a><a href="?q=failure">failure</a><a href="?q=verify">verifying</a><a href="?">landing</a></div>`
+           Screens: <a href="?q=review${planIds[0] ? `&plan_id=${esc(planIds[0])}` : ''}">review</a><a href="?q=success">success</a><a href="?q=failure">failure</a><a href="?q=verify">verifying</a><a href="?">landing</a><a href="?as=subscriber">as subscriber</a></div>`
       : '';
     root.innerHTML = bar + html;
     window.scrollTo(0, 0);
@@ -376,11 +380,19 @@
       const original = plan.discounted_price_cents != null && plan.price_cents > plan.discounted_price_cents ? plan.price_cents : null;
       const per = plan.duration_length ? ` / ${plan.duration_length > 1 ? `${plan.duration_length} ` : ''}${String(plan.duration_unit || '').replace(/s$/, '')}${plan.duration_length > 1 ? 's' : ''}` : '';
       const description = attribute(plan, 'description') || plan.description || '';
-      return `<article class="dhc-plan">
+      // The reader's own active subscription to this plan: mark it, show till when, and don't offer it again.
+      const current = state.activeSubs.find(sub => String(sub.subscription_plan_id) === String(plan.id));
+      const validTill = current ? subscriptionEnd(current) : '';
+      const button = current
+        ? `<button type="button" class="dhc-btn-primary dhc-btn-current" disabled>${esc(TEXT.CURRENT_PLAN)}</button>`
+        : `<button type="button" class="dhc-btn-primary" data-action="choose" data-plan="${esc(plan.id)}">${esc(CONFIG.ctaText || TEXT.SUBSCRIBE)}</button>`;
+      return `<article class="dhc-plan${current ? ' dhc-plan--current' : ''}">
+          ${current ? `<span class="dhc-plan__badge">${esc(TEXT.CURRENT_PLAN)}</span>` : ''}
           <h2 class="dhc-plan__name">${esc(plan.title)}</h2>
           <p class="dhc-plan__price">${currencySymbol(plan)}${esc(cents / 100)}<small>${esc(per)}</small>${original ? `<span class="dhc-plan__strike">${currencySymbol(plan)}${esc(original / 100)}</span>` : ''}</p>
+          ${validTill ? `<p class="dhc-plan__valid">${esc(TEXT.VALID_TILL + validTill)}</p>` : ''}
           <div class="dhc-plan__desc">${safeRichText(description)}</div>
-          <button type="button" class="dhc-btn-primary" data-action="choose" data-plan="${esc(plan.id)}">${esc(CONFIG.ctaText || TEXT.SUBSCRIBE)}</button>
+          ${button}
         </article>`;
     }).join('');
     render(`<section class="dhc-landing">
@@ -392,12 +404,24 @@
         <div class="dhc-notice-slot"></div>
         ${cards ? `<div class="dhc-plans">${cards}</div>` : `<p class="dhc-empty">${esc(TEXT.NO_PLANS)}</p>`}
       </section>`, 'landing');
-    if (message) notice(message.html, message.kind);
+    if (message) { notice(message.html, message.kind); return; }
+    // Subscribed to a plan that isn't on this page: say which, so the reader knows why they can't buy.
+    const offPage = state.activeSubs.find(sub => !findPlan(sub.subscription_plan_id));
+    if (offPage && !state.activeSubs.some(sub => findPlan(sub.subscription_plan_id))) {
+      const till = subscriptionEnd(offPage);
+      notice(esc(`${TEXT.SUBSCRIBED_TO}${offPage.plan_name || 'a plan'}${till ? ` (${TEXT.VALID_TILL.toLowerCase()}${till})` : ''}.`));
+    }
   }
 
-  // review-page/index.js calculateDates, formatDate
+  // dd/mm/yyyy, as review-page/index.js formatDate and the profile page show dates.
+  const formatDate = date => `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}/${date.getFullYear()}`;
+  function subscriptionEnd(sub) {
+    const end = new Date(sub?.end_timestamp || sub?.end_date || 0);
+    return Number.isNaN(end.getTime()) || end.getTime() === 0 ? '' : formatDate(end);
+  }
+  // review-page/index.js calculateDates
   function planDates(plan) {
-    const format = date => `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}/${date.getFullYear()}`;
+    const format = formatDate;
     const start = new Date();
     const end = new Date(start);
     const length = parseInt(plan?.duration_length, 10);
@@ -678,6 +702,7 @@
       id: res?.subscription?.id || ''
     });
     accountCheck = Promise.resolve('subscriber');
+    if (res?.subscription) state.activeSubs = [...state.activeSubs, { subscription_plan_id: plan.id, ...res.subscription }];
     setAddress('success', null, false);
     renderSuccess();
   }
@@ -788,7 +813,13 @@ ${describeError(error)}`)}</pre>`);
     const pendingId = preview ? null : takePendingPlan();
     const reviewId = q === 'review' ? query.get('plan_id') : null;
     setAddress(null, null, false);
+    if (preview && query.get('as') === 'subscriber' && state.plans[0]) { // design check of the subscriber view
+      const end = new Date(); end.setFullYear(end.getFullYear() + 1);
+      state.activeSubs = [{ subscription_plan_id: state.plans[0].id, plan_name: state.plans[0].title, status: 'active', end_timestamp: end.toISOString() }];
+    }
     renderLanding();
+    // The account check finishes after the cards are drawn: redraw them so the reader's current plan is marked.
+    if (!preview) accountStatus().then(() => { if (state.view === 'landing' && !state.paying && state.activeSubs.length) renderLanding(); });
     const resume = findPlan(pendingId || reviewId);
     if (resume && isLoggedIn()) choosePlan(resume);
   }

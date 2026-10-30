@@ -32,7 +32,7 @@ Analytics events (`window.dataLayer`): `campaign_page_view`, `subscription_plan_
 | `www.prajavani.net` | `web.tpml.in` | `vMyvRVh97dcV4nDspcBBXyKq` | `/auth/accesstype-pv-token` |
 
 Any other host runs in **preview**: real plans (from `previewSite`, or `?site=<host>`), no login, no payment.
-In preview, `?q=review|success|failure|verify` opens each screen, `?q=verify&slow=1` shows the slow version,
+In preview, `?q=review|success|failure|verify` opens each screen, `?q=verify&slow=1` shows the slow version, `?as=subscriber` marks the first plan as the current plan,
 and `?simulate=failure` makes Pay fail.
 
 ## Testing on dev (do this before live)
