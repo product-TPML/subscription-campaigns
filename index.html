@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Subscribe | Deccan Herald</title>
+  <meta name="robots" content="noindex">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Roboto+Slab:wght@400;700&display=swap">
+  <link rel="stylesheet" href="campaign.css">
+  <style>body { margin: 0; }</style>
+</head>
+<body>
+  <!-- Everything from here to the end of <body> is what cms-paste.html puts on the newspaper's CMS page. -->
+  <div id="dh-campaign"></div>
+  <script>
+    // Per-campaign settings. Plan IDs differ between the live and the dev (sandbox) AccessType accounts.
+    window.DH_CAMPAIGN = {
+      slug: 'sample-campaign',                 // analytics label and login-return key; one per campaign
+      plans: {
+        'dev.deccanherald.com': ['7823'],      // sandbox "Real payment Plan" (Rs 25)
+        'www.deccanherald.com': [],            // live plan IDs go here
+        'www.prajavani.net': []
+      },
+      previewSite: 'dev.deccanherald.com',     // where GitHub Pages / local preview reads plans from
+      returnUrl: '/premium',                   // after success and "Go to Deccan Herald"
+      ctaText: 'Subscribe',
+      hero: {
+        eyebrow: 'Limited period offer',
+        title: 'Subscribe to Deccan Herald',
+        text: 'Unlimited access to premium stories, the e-paper and newsletters.'
+      }
+    };
+  </script>
+  <script src="campaign.js" defer></script>
+</body>
+</html>

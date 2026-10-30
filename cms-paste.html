@@ -1,0 +1,28 @@
+<!--
+  Paste this into the CMS page (e.g. dev.deccanherald.com/pages/<campaign>), with the page's header/footer settings as wanted.
+  The CSS and JS load from GitHub Pages; changes there go live without pasting again (hard-refresh with Ctrl+F5).
+  Edit the settings below per campaign. Plan IDs differ between live (www) and dev (sandbox) AccessType accounts.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Roboto+Slab:wght@400;700&display=swap">
+<link rel="stylesheet" href="https://product-tpml.github.io/campaign-pages/campaign.css">
+<div id="dh-campaign"></div>
+<script>
+  window.DH_CAMPAIGN = {
+    slug: 'sample-campaign',
+    plans: {
+      'dev.deccanherald.com': ['7823'],
+      'www.deccanherald.com': [],
+      'www.prajavani.net': []
+    },
+    returnUrl: '/premium',
+    ctaText: 'Subscribe',
+    hero: {
+      eyebrow: 'Limited period offer',
+      title: 'Subscribe to Deccan Herald',
+      text: 'Unlimited access to premium stories, the e-paper and newsletters.'
+    }
+  };
+</script>
+<script src="https://product-tpml.github.io/campaign-pages/campaign.js" defer></script>
