@@ -583,7 +583,13 @@
     if (!error) return 'unknown error';
     const parts = [error.name, error.message].filter(Boolean);
     let detail = '';
-    try { detail = JSON.stringify(error, Object.getOwnPropertyNames(error).filter(key => key !== 'stack')); } catch { /* circular */ }
+    try {
+      // Error objects keep their fields out of JSON; copy them over (but not the stack). Plain objects go as they are.
+      const plain = error instanceof Error
+        ? Object.fromEntries(Object.getOwnPropertyNames(error).filter(key => key !== 'stack').map(key => [key, error[key]]))
+        : error;
+      detail = JSON.stringify(plain);
+    } catch { /* circular */ }
     if (detail && detail !== '{}') parts.push(detail);
     return parts.join(' | ').slice(0, 1500) || String(error);
   }
