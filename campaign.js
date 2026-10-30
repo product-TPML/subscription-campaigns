@@ -85,7 +85,16 @@
     SUBSCRIBE: 'Subscribe',
     CURRENT_PLAN: 'Current Plan',
     VALID_TILL: 'Valid till ',
-    SUBSCRIBED_TO: 'You are subscribed to '
+    SUBSCRIBED_TO: 'You are subscribed to ',
+    // Plan change pop-ups (subscribe-page/upgrade-modal, downgrade-modal)
+    PLAN_CHANGE_TITLE: 'Plan Change Requested',
+    UPGRADE_MSG: 'Your plan change request has been registered. Customer Support will get in touch with you on your registered Email ID or Phone number within 2-3 working days and help you with your plan change',
+    UPGRADE_MSG_2: 'Your current plan will continue to work without interruptions. In case of any further queries, you may reach out to us:',
+    DOWNGRADE_MSG: 'Your plan change request has been registered, and as per our policy, we will be able to change your plan once your current plan expires. Your current plan will continue to stay active till ',
+    DOWNGRADE_MSG_2: 'In case of any further queries, you may reach out to us:',
+    POPUP_BTN: 'OK',
+    PLAN_CHANGE_SENT: type => `Plan ${type} request sent`,
+    PLAN_CHANGE_FAILED: 'We couldn\u2019t send your plan change request. Please contact us or try again.'
   };
 
   const CONFIG = window.DH_CAMPAIGN || {};
@@ -252,7 +261,7 @@
   }
 
   // One account check per page view: 'logged-out' | 'subscriber' | 'not-subscriber' | 'error'.
-  const state = { plans: [], user: null, activeSubs: [], paying: false, plan: null, view: 'loading' };
+  const state = { plans: [], allPlans: new Map(), user: null, activeSubs: [], paying: false, plan: null, view: 'loading' };
   let accountCheck;
   function accountStatus() {
     if (!isLoggedIn()) return Promise.resolve('logged-out');
@@ -286,6 +295,7 @@
     }));
     const missing = planIds.filter(id => !byId.has(id));
     if (missing.length) console.warn('[campaign] Plans not found or disabled in AccessType:', missing.join(', '));
+    state.allPlans = byId;
     return planIds.map(id => byId.get(id)).filter(Boolean);
   }
   const findPlan = id => state.plans.find(plan => String(plan.id) === String(id));
@@ -552,14 +562,20 @@
   // ---------------------------------------------------------------------------
   async function choosePlan(plan) {
     track('subscription_plan_selection', planEventData(plan));
-    if (preview) { openReview(plan); return; }
+    if (preview) {
+      const change = planChange(plan);
+      if (change) openPlanChange(change); else openReview(plan);
+      return;
+    }
     if (!isLoggedIn()) { startLogin(plan); return; }
     setBusy(true);
     const status = await accountStatus();
     setBusy(false);
     if (status === 'subscriber') {
       if (state.view !== 'landing') { setAddress(null, null, false); renderLanding(); }
-      notice(esc(TEXT.ALREADY_SUBSCRIBED));
+      const change = planChange(plan);
+      if (change) openPlanChange(change);
+      else notice(esc(TEXT.ALREADY_SUBSCRIBED)); // same plan or same price: nothing to change to
       return;
     }
     if (status === 'error') {
@@ -570,6 +586,104 @@
     if (status === 'logged-out') { startLogin(plan); return; }
     openReview(plan);
   }
+  // ---------------------------------------------------------------------------
+  // Upgrade / downgrade for readers who already subscribe (subscribe-page/index.js handlePlanSelect,
+  // handleConfirmPlanChange). Nothing is charged here: OK sends the request to Customer Support through
+  // the site's /plan-change-request (email + Google Sheet), and they change the plan.
+  // ---------------------------------------------------------------------------
+  // /subscribe's formatPlanName, for the plan_change_initiated event
+  function changePlanName(plan) {
+    const unit = String(plan?.duration_unit || 'year').toLowerCase().replace(/s$/, '');
+    const name = `${plan?.duration_length || 1}-${unit}`;
+    return name === '1-month' ? 'monthly' : (plan?.title || name);
+  }
+  function planChange(plan) {
+    const matchedSubscription = state.activeSubs.find(subscriptionActive);
+    if (!matchedSubscription) return null;
+    // The current plan from AccessType's list; if retired or hidden there, rebuilt from the subscription.
+    const currentPlan = state.allPlans.get(String(matchedSubscription.subscription_plan_id)) || {
+      id: matchedSubscription.subscription_plan_id,
+      plan_name: matchedSubscription.plan_name,
+      price_cents: matchedSubscription.plan_amount_cents || matchedSubscription.payment_amount_cents || 0
+    };
+    if (String(currentPlan.id) === String(plan.id)) return null;
+    const currentPrice = currentPlan.price_cents ?? 0;
+    const selectedPrice = plan.price_cents ?? 0;
+    if (selectedPrice === currentPrice) return null;
+    return { currentPlan, selectedPlan: plan, matchedSubscription, changeType: selectedPrice > currentPrice ? 'upgrade' : 'downgrade' };
+  }
+  let planChangeData = null;
+  function onModalKey(event) { if (event.key === 'Escape') closePlanChange(); }
+  function closePlanChange() {
+    planChangeData = null;
+    root.querySelector('.dhc-modal-overlay')?.remove();
+    document.body.style.overflow = '';
+    document.removeEventListener('keydown', onModalKey);
+  }
+  function openPlanChange(change) {
+    planChangeData = change;
+    track('plan_change_initiated', {
+      uuid: state.user?.id || 'NA',
+      from_plan: changePlanName(change.currentPlan),
+      to_plan: changePlanName(change.selectedPlan),
+      plan_price: change.selectedPlan.price_cents ? change.selectedPlan.price_cents / 100 : 'NA',
+      currency: change.selectedPlan.price_currency || 'INR'
+    });
+    const end = new Date(change.matchedSubscription.end_timestamp);
+    const endDate = Number.isNaN(end.getTime()) ? '' : end.toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' });
+    const messages = change.changeType === 'upgrade'
+      ? `<p class="dhc-popup-message">${esc(TEXT.UPGRADE_MSG)}</p><p class="dhc-popup-message">${esc(TEXT.UPGRADE_MSG_2)}</p>`
+      : `<p class="dhc-popup-message">${esc(TEXT.DOWNGRADE_MSG + endDate)}.</p><p class="dhc-popup-message">${esc(TEXT.DOWNGRADE_MSG_2)}</p>`;
+    root.querySelector('.dhc-modal-overlay')?.remove();
+    root.insertAdjacentHTML('beforeend', `<div class="dhc-modal-overlay" data-action="close-modal">
+        <div class="dhc-popupContainer" role="dialog" aria-modal="true" aria-labelledby="dhc-popup-title">
+          <h2 class="dhc-popup-title" id="dhc-popup-title">${esc(TEXT.PLAN_CHANGE_TITLE)}</h2>
+          ${messages}
+          <div class="dhc-contactsWrapper">
+            <a class="dhc-pill" href="${esc(siteText.whatsappLink)}" target="_blank" rel="noopener noreferrer">${ICONS.whatsapp}<span>${esc(siteText.whatsappNumber)}</span></a>
+            <a class="dhc-pill dhc-pill--mail" href="${esc(siteText.emailLink)}" target="_blank" rel="noopener noreferrer">${ICONS.mail}<span>${esc(siteText.emailId)}</span></a>
+            <div><p class="dhc-workingHoursLabel">${esc(TEXT.TIMING_TITLE)}</p><p class="dhc-workingHoursTime">${esc(TEXT.TIMING_TEXT)}</p></div>
+          </div>
+          <button type="button" class="dhc-popup-button" data-action="confirm-plan-change">${esc(TEXT.POPUP_BTN)}</button>
+        </div>
+      </div>`);
+    document.body.style.overflow = 'hidden';
+    document.addEventListener('keydown', onModalKey);
+    root.querySelector('.dhc-popup-button')?.focus();
+  }
+  async function confirmPlanChange() {
+    const change = planChangeData;
+    if (!change) return;
+    const button = root.querySelector('.dhc-popup-button');
+    if (button) { button.disabled = true; button.innerHTML = '<span class="dhc-loader dhc-loader--small"></span>'; }
+    let sent = false;
+    try {
+      if (preview) {
+        await sleep(600);
+        sent = true;
+      } else {
+        const response = await fetch('/plan-change-request', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: state.user?.email || '',
+            phone: state.user?.phone || '',
+            currentPlan: change.currentPlan,
+            selectedPlan: change.selectedPlan,
+            changeType: change.changeType,
+            matchedSubscription: change.matchedSubscription || null
+          })
+        });
+        const result = await response.json().catch(() => ({}));
+        sent = response.ok && result?.success !== false;
+      }
+    } catch (error) {
+      console.warn('[campaign] Plan change request failed:', error);
+    }
+    closePlanChange();
+    notice(sent ? esc(TEXT.PLAN_CHANGE_SENT(change.changeType)) : esc(TEXT.PLAN_CHANGE_FAILED), sent ? '' : 'error');
+  }
+
   function openReview(plan, push = true) {
     if (push) setAddress('review', plan.id, true);
     renderReview(plan);
@@ -767,6 +881,10 @@ ${describeError(error)}`)}</pre>`);
       else if (state.plan) { setAddress('review', state.plan.id, false); renderReview(state.plan); } else backToLanding();
     } else if (action === 'return') {
       location.replace(new URL(returnUrl, location.origin).toString());
+    } else if (action === 'close-modal') {
+      if (event.target === target) closePlanChange(); // the dark backdrop only, not clicks inside the pop-up
+    } else if (action === 'confirm-plan-change') {
+      confirmPlanChange();
     } else if (action === 'change-account') {
       if (preview) return;
       track('logout', { uuid: state.user?.id || 'NA', source: 'change_account' });
@@ -815,7 +933,8 @@ ${describeError(error)}`)}</pre>`);
     setAddress(null, null, false);
     if (preview && query.get('as') === 'subscriber' && state.plans[0]) { // design check of the subscriber view
       const end = new Date(); end.setFullYear(end.getFullYear() + 1);
-      state.activeSubs = [{ subscription_plan_id: state.plans[0].id, plan_name: state.plans[0].title, status: 'active', end_timestamp: end.toISOString() }];
+      const held = findPlan(query.get('current')) || state.plans[0]; // ?current=<plan id> picks which plan the preview reader holds
+      state.activeSubs = [{ subscription_plan_id: held.id, plan_name: held.title, status: 'active', end_timestamp: end.toISOString() }];
     }
     renderLanding();
     // The account check finishes after the cards are drawn: redraw them so the reader's current plan is marked.

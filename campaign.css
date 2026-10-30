@@ -277,3 +277,34 @@
   .dhc-mailBtn { margin-top: 12px; gap: 11px; }
   .dhc-timingTitle { margin-top: 10px; }
 }
+
+/* ---------- Plan change pop-up (upgrade-modal / downgrade-modal index.m.css; both identical) ---------- */
+.dhc-modal-overlay {
+  position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0, 0, 0, 0.6);
+  z-index: 1000; display: flex; align-items: center; justify-content: center;
+}
+.dhc-popupContainer {
+  display: flex; width: 310px; padding: 20px; flex-direction: column; justify-content: center; align-items: center;
+  gap: 15px; border-radius: 6px; background: #FFF;
+}
+.dhc-popup-title { color: #000; text-align: center; font-family: var(--secondary-font); font-size: 18px; font-weight: 400; line-height: 26px; margin: 0; }
+.dhc-popup-message { color: #333; text-align: center; font-family: var(--secondary-font); font-size: 14px; font-weight: 400; line-height: normal; margin: 0; }
+.dhc-popup-message + .dhc-popup-message { margin-top: 10px; }
+.dhc-contactsWrapper { display: flex; flex-direction: column; align-items: center; gap: 10px; width: 100%; }
+.dhc-pill {
+  display: flex; padding: 5px 10px; align-items: center; gap: 5px; border-radius: 22px; background: #EEE; text-decoration: none;
+  color: #000; font-family: var(--secondary-font); font-size: 14px; line-height: 23px;
+}
+.dhc-pill--mail { gap: 6px; }
+.dhc-pill--mail span { text-decoration: underline; text-underline-position: from-font; }
+.dhc-pill--mail svg path { fill: #000; }
+.dhc-workingHoursLabel { color: #000; text-align: center; font-family: var(--secondary-font); font-size: 12px; line-height: 24px; text-transform: capitalize; margin: 0; }
+.dhc-workingHoursTime { color: rgba(0, 0, 0, 0.60); text-align: center; font-family: var(--secondary-font); font-size: 12px; margin: 0; }
+.dhc-popup-button {
+  display: flex; width: 92px; padding: 10px 0; justify-content: center; align-items: center; gap: 10px; border-radius: 6px;
+  border: 1px solid var(--dhc-gold); background: var(--dhc-yellow); color: #000; text-align: center;
+  font-family: var(--secondary-font); font-size: 16px; font-weight: 400; line-height: 22px; text-transform: capitalize; cursor: pointer;
+}
+.dhc-popup-button:disabled { cursor: default; }
+.dhc-loader--small { width: 16px; height: 22px; display: inline-block; background: none; -webkit-mask: none; mask: none;
+  border: 2px solid #000; border-right-color: transparent; border-radius: 50%; height: 16px; animation: dhc-l13 1s infinite linear; }
