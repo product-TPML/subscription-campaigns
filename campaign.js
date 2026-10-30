@@ -555,16 +555,27 @@
     else { setAddress(null, null, false); renderLanding(); }
   }
 
+  // AccessType puts field errors either under error.error or, from the subscription preview, under error.error.message
+  // (seen on dev, 30 Oct 2026: error.error.message['payment.from_gateway']). Look in both.
+  function errorField(error, key) {
+    const [group, field] = key.split('.');
+    const places = [error?.error, error?.error?.message, error];
+    for (const place of places) {
+      if (!place || typeof place !== 'object') continue;
+      const value = place[key] ?? place[group]?.[field];
+      if (value != null) return value;
+    }
+    return null;
+  }
+  const firstOf = value => (Array.isArray(value) ? value[0] : value);
   // Errors that mean "paid, AccessType still confirming" (subscribe-page/index.js handlePay).
   function isVerificationError(error) {
-    const fromGateway = error?.error?.['payment.from_gateway'] || error?.['payment.from_gateway'] || error?.payment?.from_gateway;
-    const gatewayMessage = Array.isArray(fromGateway) ? fromGateway[0]?.message : fromGateway?.message;
-    const amountError = error?.error?.['payment.amount_cents'] || error?.['payment.amount_cents'] || error?.payment?.amount_cents;
-    const amountMessage = Array.isArray(amountError) ? amountError[0] : amountError;
-    const message = error?.message || error?.error?.message || gatewayMessage || '';
+    const gatewayMessage = firstOf(errorField(error, 'payment.from_gateway'))?.message;
+    const amountMessage = firstOf(errorField(error, 'payment.amount_cents'));
+    const message = [error?.message, error?.error?.message, gatewayMessage].find(value => typeof value === 'string') || '';
     return gatewayMessage === 'Verification failed. Subscription neither active nor authenticated'
       || gatewayMessage === 'Subscription neither active or authenticated'
-      || String(message).includes('0 is not matching subscription plan amount')
+      || message.includes('0 is not matching subscription plan amount')
       || (typeof amountMessage === 'string' && amountMessage.includes('0 is not matching subscription plan amount'));
   }
   // AccessType rejects with Error objects or plain objects; make either readable in the console and on dev.
@@ -577,7 +588,8 @@
     return parts.join(' | ').slice(0, 1500) || String(error);
   }
   function gatewayError(error) {
-    return error?.error?.['payment.from_gateway']?.[0] || error?.error?.payment?.from_gateway?.[0] || null;
+    const gateway = firstOf(errorField(error, 'payment.from_gateway'));
+    return gateway && typeof gateway === 'object' ? gateway : null;
   }
   function sendEmail(route, body) {
     if (preview || (!body.email && !body.phone)) return Promise.resolve();
@@ -669,7 +681,7 @@
     sendEmail('/subscription-failure-email', {
       ...emailBase(plan),
       id: reference,
-      payment_error: gateway?.message || error?.error?.message || error?.message || ''
+      payment_error: [gateway?.message, error?.error?.message, error?.message].find(value => typeof value === 'string') || ''
     });
     track('payment_failed', { ...planEventData(plan), plan_price: priceCents(plan) / 100, reference_id: reference || 'NA' });
     setAddress('failure', null, state.view !== 'failure'); // a failed retry does not add another history entry
