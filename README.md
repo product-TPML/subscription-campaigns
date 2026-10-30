@@ -37,7 +37,7 @@ and `?simulate=failure` makes Pay fail.
 
 ## Testing on dev (do this before live)
 - Use a separate browser profile or an incognito window. Dev and www share the `.deccanherald.com` login cookies.
-- Sandbox plan 7823 ("Real payment Plan", ₹25, 7 days, recurring). Check with the tech team whether it charges real money.
+- Sandbox plans: 7750 (1 Year, ₹1,299, recurring), 7755 (One Time Plan, ₹175, not recurring), 7753 (₹8, recurring, hidden). 7823 fails: its Razorpay plan link is invalid in the sandbox (422, 30 Oct 2026). Check with the tech team whether the sandbox charges real money.
 - Cases to try:
   - logged out → login → back → Review;
   - already subscribed;
