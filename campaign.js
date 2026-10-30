@@ -567,6 +567,15 @@
       || String(message).includes('0 is not matching subscription plan amount')
       || (typeof amountMessage === 'string' && amountMessage.includes('0 is not matching subscription plan amount'));
   }
+  // AccessType rejects with Error objects or plain objects; make either readable in the console and on dev.
+  function describeError(error) {
+    if (!error) return 'unknown error';
+    const parts = [error.name, error.message].filter(Boolean);
+    let detail = '';
+    try { detail = JSON.stringify(error, Object.getOwnPropertyNames(error).filter(key => key !== 'stack')); } catch { /* circular */ }
+    if (detail && detail !== '{}') parts.push(detail);
+    return parts.join(' | ').slice(0, 1500) || String(error);
+  }
   function gatewayError(error) {
     return error?.error?.['payment.from_gateway']?.[0] || error?.error?.payment?.from_gateway?.[0] || null;
   }
@@ -590,6 +599,7 @@
     const payButton = root.querySelector('[data-action="pay"]');
     if (payButton) payButton.textContent = 'Processing...';
     let res;
+    let step = 'start';
     try {
       if (preview) {
         await sleep(800);
@@ -598,13 +608,17 @@
         renderSuccess();
         return;
       }
+      step = 'get-user-details';
       state.user ||= await getUser();
+      step = 'accesstype pass + setUser';
       await setAccessTypeUser(state.user); // fresh AccessType pass for every attempt, as /subscribe does
       await sleep(1000);
+      step = 'getPaymentOptions';
       const options = await window.AccessType.getPaymentOptions();
       const razorpay = (options?.data || options)?.razorpay;
       if (!razorpay) throw new Error('Razorpay is not offered for this AccessType account');
       const { email, phone, name } = state.user;
+      step = 'razorpay.proceed';
       res = await razorpay.proceed({
         type: 'standard',
         plan: { id: plan.id, title: plan.title, price_cents: plan.price_cents },
@@ -621,9 +635,9 @@
       }
       // No subscription and no error (checkout closed): stay on review, as /subscribe does.
     } catch (error) {
-      console.warn('[campaign] Payment did not complete:', error);
+      console.error(`[campaign] Payment did not complete at step "${step}":`, error, describeError(error));
       if (isVerificationError(error)) { verify(plan); return; }
-      failed(plan, error, res);
+      failed(plan, error, res, step);
     } finally {
       state.paying = false;
       setBusy(false);
@@ -649,7 +663,7 @@
     setAddress('success', null, false);
     renderSuccess();
   }
-  function failed(plan, error, res) {
+  function failed(plan, error, res, step = '') {
     const gateway = gatewayError(error);
     const reference = gateway?.payload || res?.error?.id || error?.error?.metadata?.payment_id || error?.payment?.id || '';
     sendEmail('/subscription-failure-email', {
@@ -660,6 +674,12 @@
     track('payment_failed', { ...planEventData(plan), plan_price: priceCents(plan) / 100, reference_id: reference || 'NA' });
     setAddress('failure', null, state.view !== 'failure'); // a failed retry does not add another history entry
     renderFailure();
+    // Not on the live sites: show what AccessType said, for testing.
+    if (!location.hostname.startsWith('www.')) {
+      root.querySelector('.dhc-message')?.insertAdjacentHTML('afterend',
+        `<pre class="dhc-debug" style="white-space:pre-wrap;word-break:break-word;font-size:12px;background:#fff;border:1px solid #F5C2C2;border-radius:6px;padding:8px;margin:12px 0 0;max-width:560px;text-align:left">${esc(`Step: ${step}
+${describeError(error)}`)}</pre>`);
+    }
   }
   // Paid but not confirmed yet: look for the new subscription every 5 s for up to 2 minutes.
   async function verify(plan) {
