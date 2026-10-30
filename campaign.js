@@ -34,6 +34,11 @@
       sso: 'https://web-dev.tpml.in', passRoute: '/auth/accesstype-dh-token',
       accessTypeKey: 'nBX5K3Z2JAaFD5As78im28dh', cookieDomain: '.deccanherald.com', text: DH_TEXT
     },
+    // Quintype's own address for the same sandbox site (publisher 7554). Cookies can only be host-only here.
+    'dh-sandbox-web.quintype.io': {
+      sso: 'https://web-dev.tpml.in', passRoute: '/auth/accesstype-dh-token',
+      accessTypeKey: 'nBX5K3Z2JAaFD5As78im28dh', cookieDomain: null, text: DH_TEXT, plansFrom: 'dev.deccanherald.com'
+    },
     // PV: routes and key checked; the support contacts below are DH's until PV confirms its own.
     'www.prajavani.net': {
       sso: 'https://web.tpml.in', passRoute: '/auth/accesstype-pv-token',
@@ -88,7 +93,7 @@
   const dataHost = site ? location.hostname : (query.get('site') || CONFIG.previewSite || 'dev.deccanherald.com');
   const dataSite = SITES[dataHost] || SITES['dev.deccanherald.com'];
   const siteText = dataSite.text;
-  const planIds = ((CONFIG.plans || {})[dataHost] || []).map(String);
+  const planIds = ((CONFIG.plans || {})[dataHost] || (CONFIG.plans || {})[dataSite.plansFrom] || []).map(String);
   const slug = CONFIG.slug || 'campaign';
   const returnUrl = CONFIG.returnUrl || '/premium'; // after success, and "Go to <publisher>"; /subscribe also defaults to /premium
   const PENDING_KEY = 'dhc_pending_plan';
@@ -123,7 +128,7 @@
   function saveLogin(access, refresh) {
     const write = (name, value) => {
       const expiry = tokenExpiry(value);
-      document.cookie = `${name}=${encodeURIComponent(value)}; Path=/; Domain=${site.cookieDomain}; Secure; SameSite=Lax`
+      document.cookie = `${name}=${encodeURIComponent(value)}; Path=/${site.cookieDomain ? `; Domain=${site.cookieDomain}` : ''}; Secure; SameSite=Lax`
         + (expiry ? `; Expires=${expiry.toUTCString()}` : '');
     };
     write('st-access-token', access);
@@ -135,7 +140,7 @@
   function clearLogin() {
     const expired = 'Expires=Thu, 01 Jan 1970 00:00:00 GMT';
     ['st-access-token', 'st-refresh-token', 'qt-auth'].forEach(name => {
-      document.cookie = `${name}=; Path=/; Domain=${site.cookieDomain}; ${expired}; Secure; SameSite=Lax`;
+      if (site.cookieDomain) document.cookie = `${name}=; Path=/; Domain=${site.cookieDomain}; ${expired}; Secure; SameSite=Lax`;
       document.cookie = `${name}=; Path=/; ${expired}; Secure; SameSite=Lax`;
     });
     const local = storage('localStorage');
